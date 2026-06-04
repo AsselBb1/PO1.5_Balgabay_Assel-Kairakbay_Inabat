@@ -1,15 +1,6 @@
 CREATE schema if NOT exists coffee_shop;
 set search_path to coffee_shop;
 
-drop table if exists payments cascade;
-drop table if exists loyalty_cards cascade;
-drop table if exists order_items cascade;
-drop table if exists orders cascade;
-drop table if exists employees cascade;
-drop table if exists drinks cascade;
-drop table if exists categories cascade;
-drop table if exists customers cascade;
-
 create table if not exists customers (
     customer_id int generated always as identity primary key,
     full_name varchar(100) not null,
@@ -376,14 +367,7 @@ returning order_id;
 rollback;
 
 
-
-
-drop role if exists coffee_shop_readonly;
-drop role if exists coffee_shop_writer;
-
-
 create role coffee_shop_readonly;
-
 
 create role coffee_shop_writer;
 
