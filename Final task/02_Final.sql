@@ -1,137 +1,119 @@
-CREATE schema if NOT exists coffee_shop;
-set search_path to coffee_shop;
+CREATE SCHEMA IF NOT EXISTS coffee_shop;
+SET search_path TO coffee_shop;
 
-create table if not exists customers (
-    customer_id int generated always as identity primary key,
-    full_name varchar(100) not null,
-    email varchar(150) not null unique,
-    phone varchar(20) not null,
-    registration_date date default current_date,
-    status varchar(20) default 'active',
-    check (status in ('active','inactive'))
+CREATE TABLE IF NOT EXISTS customers (
+    customer_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    full_name VARCHAR(100) NOT NULL,
+    email VARCHAR(150) NOT NULL UNIQUE,
+    phone VARCHAR(25) NOT NULL,
+    registration_date DATE DEFAULT CURRENT_DATE,
+    status VARCHAR(20) DEFAULT 'active'
 );
 
-create table if not exists categories (
-    category_id int generated always as identity primary key,
-    category_name varchar(50) not null unique
+CREATE TABLE IF NOT EXISTS categories (
+    category_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    category_name VARCHAR(50) NOT NULL UNIQUE
 );
 
-create table if not exists drinks (
-    drink_id int generated always as identity primary key,
-    category_id int not null,
-    drink_name varchar(100) not null,
-    price numeric(10,2) not null,
-    size varchar(20) not null,
-    foreign key (category_id)
-        references categories(category_id)
-        on delete restrict,
-    check (price >= 0),
-    check (size in ('small','medium','large'))
+CREATE TABLE IF NOT EXISTS drinks (
+    drink_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    category_id INT NOT NULL REFERENCES categories(category_id) ON DELETE RESTRICT,
+    drink_name VARCHAR(100) NOT NULL,
+    price NUMERIC(10,2) NOT NULL,
+    size VARCHAR(20) NOT NULL
 );
 
-create table if not exists employees (
-    employee_id int generated always as identity primary key,
-    full_name varchar(100) not null,
-    position varchar(50) not null,
-    hire_date date not null,
-    salary numeric(10,2) not null,
-    check (salary >= 0),
-    check (hire_date > date '2026-01-01')
+CREATE TABLE IF NOT EXISTS employees (
+    employee_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    full_name VARCHAR(100) NOT NULL,
+    position VARCHAR(50) NOT NULL,
+    hire_date DATE NOT NULL,
+    salary NUMERIC(10,2) NOT NULL
 );
 
-create table if not exists orders (
-    order_id int generated always as identity primary key,
-    customer_id int not null,
-    employee_id int,
-    order_date date not null,
-    status varchar(20) default 'pending',
-    foreign key (customer_id)
-        references customers(customer_id)
-        on delete cascade,
-    foreign key (employee_id)
-        references employees(employee_id)
-        on delete set null,
-    check (status in ('pending','completed','cancelled')),
-    check (order_date > date '2026-01-01')
+CREATE TABLE IF NOT EXISTS orders (
+    order_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    customer_id INT NOT NULL REFERENCES customers(customer_id) ON DELETE CASCADE,
+    employee_id INT REFERENCES employees(employee_id) ON DELETE SET NULL,
+    order_date DATE NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending'
 );
 
-create table if not exists order_items (
-    order_item_id int generated always as identity primary key,
-    order_id int not null,
-    drink_id int not null,
-    quantity int not null,
-    unit_price numeric(10,2) not null,
-    total_price numeric(10,2)
-        generated always as (quantity * unit_price) stored,
-    foreign key (order_id)
-        references orders(order_id)
-        on delete cascade,
-    foreign key (drink_id)
-        references drinks(drink_id)
-        on delete restrict,
-    check (quantity > 0),
-    check (unit_price >= 0)
+CREATE TABLE IF NOT EXISTS order_items (
+    order_item_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    order_id INT NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
+    drink_id INT NOT NULL REFERENCES drinks(drink_id) ON DELETE RESTRICT,
+    quantity INT NOT NULL,
+    unit_price NUMERIC(10,2) NOT NULL,
+    total_price NUMERIC(10,2) GENERATED ALWAYS AS (quantity * unit_price) STORED
 );
 
-create table if not exists loyalty_cards (
-    card_id int generated always as identity primary key,
-    customer_id int unique,
-    points int default 0,
-    membership_level varchar(20) default 'bronze',
-    foreign key (customer_id)
-        references customers(customer_id)
-        on delete cascade,
-    check (points >= 0),
-    check (membership_level in ('bronze','silver','gold'))
+CREATE TABLE IF NOT EXISTS loyalty_cards (
+    card_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    customer_id INT UNIQUE REFERENCES customers(customer_id) ON DELETE CASCADE,
+    points INT DEFAULT 0,
+    membership_level VARCHAR(20) DEFAULT 'bronze'
 );
 
-create table if not exists payments (
-    payment_id int generated always as identity primary key,
-    order_id int not null,
-    payment_date date not null,
-    amount numeric(10,2) not null,
-    payment_method varchar(20) not null,
-    foreign key (order_id)
-        references orders(order_id)
-        on delete cascade,
-    check (amount >= 0),
-    check (payment_method in ('cash','card','mobile'))
+CREATE TABLE IF NOT EXISTS payments (
+    payment_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    order_id INT NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
+    payment_date DATE NOT NULL,
+    amount NUMERIC(10,2) NOT NULL,
+    payment_method VARCHAR(20) NOT NULL
 );
 
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='coffee_shop' AND table_name='customers' AND column_name='birth_date') THEN
+        ALTER TABLE customers ADD COLUMN birth_date DATE;
+    END IF;
 
-alter table customers
-add column birth_date date;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='coffee_shop' AND table_name='customers' AND column_name='loyalty_points') THEN
+        ALTER TABLE customers ADD COLUMN loyalty_points INT DEFAULT 0;
+    END IF;
 
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='coffee_shop' AND table_name='employees' AND column_name='email') THEN
+        ALTER TABLE employees ADD COLUMN email VARCHAR(150);
+    END IF;
+END $$;
 
-alter table customers
-alter column phone type varchar(25);
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'customers_status_check') THEN ALTER TABLE customers DROP CONSTRAINT customers_status_check; END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'drinks_price_check') THEN ALTER TABLE drinks DROP CONSTRAINT drinks_price_check; END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'drinks_size_check') THEN ALTER TABLE drinks DROP CONSTRAINT drinks_size_check; END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'uq_drink_name') THEN ALTER TABLE drinks DROP CONSTRAINT uq_drink_name; END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'employees_salary_check') THEN ALTER TABLE employees DROP CONSTRAINT employees_salary_check; END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'employees_hire_date_check') THEN ALTER TABLE employees DROP CONSTRAINT employees_hire_date_check; END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'orders_status_check') THEN ALTER TABLE orders DROP CONSTRAINT orders_status_check; END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'orders_order_date_check') THEN ALTER TABLE orders DROP CONSTRAINT orders_order_date_check; END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'order_items_quantity_check') THEN ALTER TABLE order_items DROP CONSTRAINT order_items_quantity_check; END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'order_items_unit_price_check') THEN ALTER TABLE order_items DROP CONSTRAINT order_items_unit_price_check; END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'loyalty_cards_points_check') THEN ALTER TABLE loyalty_cards DROP CONSTRAINT loyalty_cards_points_check; END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'loyalty_cards_membership_level_check') THEN ALTER TABLE loyalty_cards DROP CONSTRAINT loyalty_cards_membership_level_check; END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payments_amount_check') THEN ALTER TABLE payments DROP CONSTRAINT payments_amount_check; END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'payments_payment_method_check') THEN ALTER TABLE payments DROP CONSTRAINT payments_payment_method_check; END IF;
+END $$;
 
-alter table customers
-add column loyalty_points int default 0;
+ALTER TABLE customers ADD CONSTRAINT customers_status_check CHECK (status IN ('active','inactive'));
+ALTER TABLE drinks ADD CONSTRAINT drinks_price_check CHECK (price >= 0);
+ALTER TABLE drinks ADD CONSTRAINT drinks_size_check CHECK (size IN ('small','medium','large'));
+ALTER TABLE drinks ADD CONSTRAINT uq_drink_name UNIQUE (drink_name);
+ALTER TABLE employees ADD CONSTRAINT employees_salary_check CHECK (salary >= 0);
+ALTER TABLE employees ADD CONSTRAINT employees_hire_date_check CHECK (hire_date > DATE '2026-01-01');
+ALTER TABLE orders ADD CONSTRAINT orders_status_check CHECK (status IN ('pending','completed','cancelled'));
+ALTER TABLE orders ADD CONSTRAINT orders_order_date_check CHECK (order_date > DATE '2026-01-01');
+ALTER TABLE order_items ADD CONSTRAINT order_items_quantity_check CHECK (quantity > 0);
+ALTER TABLE order_items ADD CONSTRAINT order_items_unit_price_check CHECK (unit_price >= 0);
+ALTER TABLE loyalty_cards ADD CONSTRAINT loyalty_cards_points_check CHECK (points >= 0);
+ALTER TABLE loyalty_cards ADD CONSTRAINT loyalty_cards_membership_level_check CHECK (membership_level IN ('bronze','silver','gold'));
+ALTER TABLE payments ADD CONSTRAINT payments_amount_check CHECK (amount >= 0);
+ALTER TABLE payments ADD CONSTRAINT payments_payment_method_check CHECK (payment_method IN ('cash','card','mobile'));
 
+TRUNCATE TABLE payments, loyalty_cards, order_items, orders, employees, drinks, categories, customers RESTART IDENTITY CASCADE;
 
-alter table drinks
-add constraint uq_drink_name unique (drink_name);
-
-alter table employees
-add column email varchar(150);
-
-
-
-
-truncate table payments,
-               loyalty_cards,
-               order_items,
-               orders,
-               employees,
-               drinks,
-               categories,
-               customers
-restart identity cascade;
-
-insert into customers
-(full_name,email,phone,registration_date,birth_date)
-values
+INSERT INTO customers (full_name, email, phone, registration_date, birth_date) VALUES
 ('Aruzhan Sadykova','aruzhan@mail.kz','87010000001','2026-02-01','2002-04-10'),
 ('Dias Nurlybek','dias@mail.kz','87010000002','2026-02-03','2001-05-11'),
 ('Alina Omarova','alina@mail.kz','87010000003','2026-02-05','2000-06-15'),
@@ -143,254 +125,92 @@ values
 ('Madina Askar','madina@mail.kz','87010000009','2026-02-13','2002-04-04'),
 ('Arman Kairat','arman@mail.kz','87010000010','2026-02-14','2003-05-05');
 
+INSERT INTO categories (category_name) VALUES
+('Coffee'), ('Tea'), ('Cold Drinks'), ('Dessert'), ('Seasonal');
 
-insert into categories(category_name)
-values
-('Coffee'),
-('Tea'),
-('Cold Drinks'),
-('Dessert'),
-('Seasonal');
+INSERT INTO drinks (category_id, drink_name, price, size) VALUES
+((SELECT category_id FROM categories WHERE category_name='Coffee'),'Latte',1200,'medium'),
+((SELECT category_id FROM categories WHERE category_name='Coffee'),'Cappuccino',1300,'medium'),
+((SELECT category_id FROM categories WHERE category_name='Coffee'),'Espresso',900,'small'),
+((SELECT category_id FROM categories WHERE category_name='Tea'),'Green Tea',800,'medium'),
+((SELECT category_id FROM categories WHERE category_name='Tea'),'Black Tea',850,'medium'),
+((SELECT category_id FROM categories WHERE category_name='Cold Drinks'),'Iced Coffee',1500,'large'),
+((SELECT category_id FROM categories WHERE category_name='Cold Drinks'),'Lemonade',1000,'large'),
+((SELECT category_id FROM categories WHERE category_name='Dessert'),'Hot Chocolate',1400,'medium'),
+((SELECT category_id FROM categories WHERE category_name='Seasonal'),'Pumpkin Latte',1700,'large'),
+((SELECT category_id FROM categories WHERE category_name='Coffee'),'Americano',1100,'medium');
 
-insert into drinks
-(category_id,drink_name,price,size)
-values
-((select category_id from categories where category_name='Coffee'),'Latte',1200,'medium'),
-((select category_id from categories where category_name='Coffee'),'Cappuccino',1300,'medium'),
-((select category_id from categories where category_name='Coffee'),'Espresso',900,'small'),
-((select category_id from categories where category_name='Tea'),'Green Tea',800,'medium'),
-((select category_id from categories where category_name='Tea'),'Black Tea',850,'medium'),
-((select category_id from categories where category_name='Cold Drinks'),'Iced Coffee',1500,'large'),
-((select category_id from categories where category_name='Cold Drinks'),'Lemonade',1000,'large'),
-((select category_id from categories where category_name='Dessert'),'Hot Chocolate',1400,'medium'),
-((select category_id from categories where category_name='Seasonal'),'Pumpkin Latte',1700,'large'),
-((select category_id from categories where category_name='Coffee'),'Americano',1100,'medium');
-
-insert into employees
-(full_name,position,hire_date,salary,email)
-values
+INSERT INTO employees (full_name, position, hire_date, salary, email) VALUES
 ('Asylai Zhumakulova','Barista','2026-06-01',250000,'asylai@coffee.kz'),
 ('Assel Balgabay','Cashier','2026-06-02',220000,'assel@coffee.kz'),
 ('Aiken Amanbay','Manager','2026-05-29',400000,'manager@coffee.kz'),
 ('Inabat Kairakbay','Barista','2026-06-02',240000,'inabat@coffee.kz'),
 ('Aruzhan Tulegenova','Cashier','2026-05-22',230000,'aruzhan@coffee.kz');
 
-insert into orders
-(customer_id, employee_id, order_date, status)
-values
-(
-    (select customer_id from customers where email='alina@mail.kz'),
-    (select employee_id from employees where email='asylai@coffee.kz'),
-    '2026-02-15',
-    'completed'
-),
-(
-    (select customer_id from customers where email='dias@mail.kz'),
-    (select employee_id from employees where email='aruzhan@coffee.kz'),
-    '2026-02-16',
-    'completed'
-),
-(
-    (select customer_id from customers where email='aigerim@mail.kz'),
-    (select employee_id from employees where email='assel@coffee.kz'),
-    '2026-02-17',
-    'pending'
-),
-(
-    (select customer_id from customers where email='nursultan@mail.kz'),
-    (select employee_id from employees where email='manager@coffee.kz'),
-    '2026-02-18',
-    'completed'
-),
-(
-    (select customer_id from customers where email='dana@mail.kz'),
-    (select employee_id from employees where email='inabat@coffee.kz'),
-    '2026-02-19',
-    'cancelled'
-),
-(
-    (select customer_id from customers where email='madi@mail.kz'),
-    (select employee_id from employees where email='manager@coffee.kz'),
-    '2026-02-20',
-    'completed'
-),
-(
-    (select customer_id from customers where email='madi@mail.kz'),
-    (select employee_id from employees where email='assel@coffee.kz'),
-    '2026-02-21',
-    'completed'
-),
-(
-    (select customer_id from customers where email='sanzhar@mail.kz'),
-    (select employee_id from employees where email='inabat@coffee.kz'),
-    '2026-02-22',
-    'pending'
-),
-(
-    (select customer_id from customers where email='madina@mail.kz'),
-    (select employee_id from employees where email='manager@coffee.kz'),
-    '2026-02-23',
-    'completed'
-),
-(
-    (select customer_id from customers where email='arman@mail.kz'),
-    (select employee_id from employees where email='asylai@coffee.kz'),
-    '2026-02-24',
-    'completed'
-);
+INSERT INTO orders (customer_id, employee_id, order_date, status) VALUES
+((SELECT customer_id FROM customers WHERE email='alina@mail.kz'), (SELECT employee_id FROM employees WHERE email='asylai@coffee.kz'), '2026-02-15', 'completed'),
+((SELECT customer_id FROM customers WHERE email='dias@mail.kz'), (SELECT employee_id FROM employees WHERE email='aruzhan@coffee.kz'), '2026-02-16', 'completed'),
+((SELECT customer_id FROM customers WHERE email='aigerim@mail.kz'), (SELECT employee_id FROM employees WHERE email='assel@coffee.kz'), '2026-02-17', 'pending'),
+((SELECT customer_id FROM customers WHERE email='nursultan@mail.kz'), (SELECT employee_id FROM employees WHERE email='manager@coffee.kz'), '2026-02-18', 'completed'),
+((SELECT customer_id FROM customers WHERE email='dana@mail.kz'), (SELECT employee_id FROM employees WHERE email='inabat@coffee.kz'), '2026-02-19', 'cancelled'),
+((SELECT customer_id FROM customers WHERE email='madi@mail.kz'), (SELECT employee_id FROM employees WHERE email='manager@coffee.kz'), '2026-02-20', 'completed'),
+((SELECT customer_id FROM customers WHERE email='madi@mail.kz'), (SELECT employee_id FROM employees WHERE email='assel@coffee.kz'), '2026-02-21', 'completed'),
+((SELECT customer_id FROM customers WHERE email='sanzhar@mail.kz'), (SELECT employee_id FROM employees WHERE email='inabat@coffee.kz'), '2026-02-22', 'pending'),
+((SELECT customer_id FROM customers WHERE email='madina@mail.kz'), (SELECT employee_id FROM employees WHERE email='manager@coffee.kz'), '2026-02-23', 'completed'),
+((SELECT customer_id FROM customers WHERE email='arman@mail.kz'), (SELECT employee_id FROM employees WHERE email='asylai@coffee.kz'), '2026-02-24', 'completed');
 
+INSERT INTO order_items (order_id, drink_id, quantity, unit_price) VALUES
+((SELECT order_id FROM orders ORDER BY order_id LIMIT 1), (SELECT drink_id FROM drinks WHERE drink_name='Latte'), 2, 1200),
+((SELECT order_id FROM orders ORDER BY order_id LIMIT 1), (SELECT drink_id FROM drinks WHERE drink_name='Espresso'), 1, 900),
+((SELECT order_id FROM orders ORDER BY order_id OFFSET 1 LIMIT 1), (SELECT drink_id FROM drinks WHERE drink_name='Cappuccino'), 1, 1300),
+((SELECT order_id FROM orders ORDER BY order_id OFFSET 2 LIMIT 1), (SELECT drink_id FROM drinks WHERE drink_name='Green Tea'), 2, 800),
+((SELECT order_id FROM orders ORDER BY order_id OFFSET 3 LIMIT 1), (SELECT drink_id FROM drinks WHERE drink_name='Iced Coffee'), 2, 1500),
+((SELECT order_id FROM orders ORDER BY order_id OFFSET 4 LIMIT 1), (SELECT drink_id FROM drinks WHERE drink_name='Lemonade'), 1, 1000),
+((SELECT order_id FROM orders ORDER BY order_id OFFSET 5 LIMIT 1), (SELECT drink_id FROM drinks WHERE drink_name='Hot Chocolate'), 1, 1400),
+((SELECT order_id FROM orders ORDER BY order_id OFFSET 6 LIMIT 1), (SELECT drink_id FROM drinks WHERE drink_name='Pumpkin Latte'), 2, 1700),
+((SELECT order_id FROM orders ORDER BY order_id OFFSET 7 LIMIT 1), (SELECT drink_id FROM drinks WHERE drink_name='Americano'), 1, 1100),
+((SELECT order_id FROM orders ORDER BY order_id OFFSET 8 LIMIT 1), (SELECT drink_id FROM drinks WHERE drink_name='Latte'), 1, 1200);
 
-insert into order_items
-(order_id, drink_id, quantity, unit_price)
-values
-(
-    (select order_id from orders order by order_id limit 1),
-    (select drink_id from drinks where drink_name='Latte'),
-    2,
-    1200
-),
-(
-    (select order_id from orders order by order_id limit 1),
-    (select drink_id from drinks where drink_name='Espresso'),
-    1,
-    900
-),
-(
-    (select order_id from orders order by order_id offset 1 limit 1),
-    (select drink_id from drinks where drink_name='Cappuccino'),
-    1,
-    1300
-),
-(
-    (select order_id from orders order by order_id offset 2 limit 1),
-    (select drink_id from drinks where drink_name='Green Tea'),
-    2,
-    800
-),
-(
-    (select order_id from orders order by order_id offset 3 limit 1),
-    (select drink_id from drinks where drink_name='Iced Coffee'),
-    2,
-    1500
-),
-(
-    (select order_id from orders order by order_id offset 4 limit 1),
-    (select drink_id from drinks where drink_name='Lemonade'),
-    1,
-    1000
-),
-(
-    (select order_id from orders order by order_id offset 5 limit 1),
-    (select drink_id from drinks where drink_name='Hot Chocolate'),
-    1,
-    1400
-),
-(
-    (select order_id from orders order by order_id offset 6 limit 1),
-    (select drink_id from drinks where drink_name='Pumpkin Latte'),
-    2,
-    1700
-),
-(
-    (select order_id from orders order by order_id offset 7 limit 1),
-    (select drink_id from drinks where drink_name='Americano'),
-    1,
-    1100
-),
-(
-    (select order_id from orders order by order_id offset 8 limit 1),
-    (select drink_id from drinks where drink_name='Latte'),
-    1,
-    1200
-);
+INSERT INTO loyalty_cards (customer_id, points, membership_level)
+SELECT customer_id, 50, 'bronze' FROM customers;
 
-insert into loyalty_cards
-(customer_id, points, membership_level)
-select
-    customer_id,
-    50,
-    'bronze'
-from customers;
+INSERT INTO payments (order_id, payment_date, amount, payment_method) VALUES
+((SELECT order_id FROM orders ORDER BY order_id LIMIT 1), '2026-02-15', 3300, 'card'),
+((SELECT order_id FROM orders ORDER BY order_id OFFSET 1 LIMIT 1), '2026-02-16', 2900, 'cash'),
+((SELECT order_id FROM orders ORDER BY order_id OFFSET 3 LIMIT 1), '2026-02-18', 3000, 'mobile'),
+((SELECT order_id FROM orders ORDER BY order_id OFFSET 5 LIMIT 1), '2026-02-20', 1400, 'card'),
+((SELECT order_id FROM orders ORDER BY order_id OFFSET 6 LIMIT 1), '2026-02-21', 3400, 'cash');
 
-insert into payments
-(order_id,payment_date,amount,payment_method)
-values
-(
-    (select order_id from orders order by order_id limit 1),
-    '2026-02-15',
-    3300,
-    'card'
-),
-(
-    (select order_id from orders order by order_id offset 1 limit 1),
-    '2026-02-16',
-    2900,
-    'cash'
-),
-(
-    (select order_id from orders order by order_id offset 3 limit 1),
-    '2026-02-18',
-    3000,
-    'mobile'
-),
-(
-    (select order_id from orders order by order_id offset 5 limit 1),
-    '2026-02-20',
-    1400,
-    'card'
-),
-(
-    (select order_id from orders order by order_id offset 6 limit 1),
-    '2026-02-21',
-    3400,
-    'cash'
-);
+UPDATE customers SET status = 'inactive' WHERE email = 'dana@mail.kz';
 
+UPDATE loyalty_cards lc
+SET points = lc.points + 50
+FROM customers c
+WHERE lc.customer_id = c.customer_id AND c.status = 'active';
 
-update customers
-set status = 'inactive'
-where email = 'dana@mail.kz';
+BEGIN;
+DELETE FROM orders WHERE status = 'cancelled' RETURNING order_id;
+ROLLBACK;
 
-update loyalty_cards lc
-set points = lc.points + 50
-from customers c
-where lc.customer_id = c.customer_id
-and c.status = 'active';
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'coffee_shop_readonly') THEN
+        CREATE ROLE coffee_shop_readonly;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'coffee_shop_writer') THEN
+        CREATE ROLE coffee_shop_writer;
+    END IF;
+END $$;
 
+GRANT USAGE ON SCHEMA coffee_shop TO coffee_shop_readonly;
+GRANT SELECT ON ALL TABLES IN SCHEMA coffee_shop TO coffee_shop_readonly;
+GRANT INSERT, UPDATE ON orders TO coffee_shop_writer;
+REVOKE UPDATE ON orders FROM coffee_shop_writer;
 
-begin;
-
-delete from orders
-where status = 'cancelled'
-returning order_id;
-
-rollback;
-
-
-create role coffee_shop_readonly;
-
-create role coffee_shop_writer;
-
-grant usage on schema coffee_shop
-to coffee_shop_readonly;
-
-grant select on all tables in schema coffee_shop
-to coffee_shop_readonly;
-
-grant insert, update on orders
-to coffee_shop_writer;
-
-revoke update on orders
-from coffee_shop_writer;
-
-select * from orders;
-select * from drinks;
+SELECT * FROM orders;
+SELECT * FROM drinks;
 SELECT * FROM payments;
 SELECT * FROM loyalty_cards;
-SELECT * FROM Categories;
-
-
-
-SELECT COUNT(*) AS total_rows
-FROM order_items;
+SELECT * FROM categories;
+SELECT COUNT(*) AS total_rows FROM order_items;
 
